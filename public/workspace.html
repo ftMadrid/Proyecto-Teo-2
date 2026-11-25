@@ -128,7 +128,7 @@
                         1
                     </div>
                     <!-- SQL textarea -->
-                    <textarea id="sql-input" spellcheck="false" placeholder="-- Write your SQL query here..."
+                    <textarea id="sql-input" spellcheck="false" placeholder="Write your SQL query here..."
                         class="sql-font flex-1 bg-transparent text-violet-50 text-sm p-3 leading-6 resize-none focus:outline-none custom-scroll"></textarea>
                 </div>
             </section>
@@ -146,6 +146,24 @@
                 <div id="results-container" class="flex-1 min-h-0 overflow-auto bg-[#05060c]/90 custom-scroll">
                     <div class="h-full flex items-center justify-center text-xs text-slate-500">
                         Run a SQL query or click an object in the Database Explorer to inspect it.
+                    </div>
+                </div>
+
+                <!-- Pagination bar (shown when browsing tables or views) -->
+                <div id="pagination-bar" class="hidden h-10 shrink-0 px-4 border-t border-violet-500/20 bg-[#080912]/90 flex items-center justify-between text-xs">
+                    <span id="pagination-info" class="text-violet-200/70">Page 1</span>
+                    <div class="flex items-center gap-2">
+                        <button id="btn-prev-page" type="button"
+                            class="px-3 py-1 rounded-md bg-[#161b3a] hover:bg-[#222957] disabled:opacity-40 disabled:cursor-not-allowed border border-violet-400/30 text-violet-100 transition">
+                            Prev
+                        </button>
+                        <span id="pagination-page-badge" class="px-2.5 py-1 rounded-md bg-[#05060c] border border-violet-500/25 text-violet-300 font-medium">
+                            1
+                        </span>
+                        <button id="btn-next-page" type="button"
+                            class="px-3 py-1 rounded-md bg-[#161b3a] hover:bg-[#222957] disabled:opacity-40 disabled:cursor-not-allowed border border-violet-400/30 text-violet-100 transition">
+                            Next
+                        </button>
                     </div>
                 </div>
             </section>

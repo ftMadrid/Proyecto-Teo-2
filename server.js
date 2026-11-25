@@ -83,14 +83,38 @@ app.get('/api/connections/:id/users', async (req, res) => {
     }
 });
 
-// Workspace: execute SQL query
+// Workspace: execute SQL query (with automatic pagination)
 app.post('/api/connections/:id/query', async (req, res) => {
     try {
-        const { sql, database } = req.body;
+        const { sql, database, page, pageSize } = req.body;
         if (!sql || !sql.trim()) {
             return res.status(400).json({ ok: false, error: 'SQL query cannot be empty.' });
         }
-        const result = await dbExplorer.executeQuery(req.params.id, sql, database);
+        const result = await dbExplorer.executeQuery(
+            req.params.id,
+            sql,
+            database,
+            Number(page) || 1,
+            Number(pageSize) || 500
+        );
+        res.json({ ok: true, result });
+    } catch (err) {
+        res.status(400).json({ ok: false, error: err.message });
+    }
+});
+
+// Workspace: browse table or view with pagination
+app.get('/api/connections/:id/databases/:db/objects/:name/data', async (req, res) => {
+    try {
+        const page = Number(req.query.page) || 1;
+        const pageSize = Number(req.query.pageSize) || 500;
+        const result = await dbExplorer.browseTableData(
+            req.params.id,
+            req.params.db,
+            req.params.name,
+            page,
+            pageSize
+        );
         res.json({ ok: true, result });
     } catch (err) {
         res.status(400).json({ ok: false, error: err.message });

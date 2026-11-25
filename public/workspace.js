@@ -1,5 +1,6 @@
 const params = new URLSearchParams(window.location.search);
 const connId = params.get('id');
+const PAGE_SIZE = 500;
 
 if (!connId) {
     window.location.href = '/';
@@ -21,10 +22,19 @@ const toast = document.getElementById('toast');
 const toastBox = document.getElementById('toast-box');
 const toastText = document.getElementById('toast-text');
 const toastClose = document.getElementById('toast-close');
-let toastTimer = null;
 
+const paginationBar = document.getElementById('pagination-bar');
+const paginationInfo = document.getElementById('pagination-info');
+const paginationPageBadge = document.getElementById('pagination-page-badge');
+const btnPrevPage = document.getElementById('btn-prev-page');
+const btnNextPage = document.getElementById('btn-next-page');
+
+let toastTimer = null;
 let activeDatabase = '';
 let currentFileName = 'query.sql';
+
+// Unified pagination state for both SQL Editor queries and Explorer tables/views
+let paginationState = null;
 
 function hideToast() {
     if (toastTimer) {
@@ -91,7 +101,7 @@ sqlInput.addEventListener('scroll', () => {
 sqlInput.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
-        runQuery();
+        runQuery(1);
         return;
     }
     if (e.key === 'Tab') {
@@ -214,7 +224,7 @@ async function loadTree() {
                     item.addEventListener('click', () => {
                         sqlInput.value = `SHOW GRANTS FOR '${u.user}'@'${u.host}';`;
                         updateLineNumbers();
-                        runQuery();
+                        runQuery(1);
                     });
                     usersBox.appendChild(item);
                 });
@@ -282,64 +292,129 @@ async function loadDatabaseChildren(dbName, container) {
         container.innerHTML = '';
 
         container.appendChild(createCategoryNode('Tables', tables, (table) => {
-            setActiveDatabase(dbName);
-            sqlInput.value = `SELECT * FROM \`${dbName}\`.\`${table}\` LIMIT 100;`;
-            updateLineNumbers();
-            runQuery();
+            loadTablePage(dbName, table, 1);
         }));
 
         container.appendChild(createCategoryNode('Views', views, (view) => {
-            setActiveDatabase(dbName);
-            sqlInput.value = `SELECT * FROM \`${dbName}\`.\`${view}\` LIMIT 100;`;
-            updateLineNumbers();
-            runQuery();
+            loadTablePage(dbName, view, 1);
         }));
 
         container.appendChild(createCategoryNode('Procedures', procedures, (proc) => {
             setActiveDatabase(dbName);
             sqlInput.value = `SHOW CREATE PROCEDURE \`${dbName}\`.\`${proc}\`;`;
             updateLineNumbers();
-            runQuery();
+            runQuery(1);
         }));
 
         container.appendChild(createCategoryNode('Functions', functions, (fn) => {
             setActiveDatabase(dbName);
             sqlInput.value = `SHOW CREATE FUNCTION \`${dbName}\`.\`${fn}\`;`;
             updateLineNumbers();
-            runQuery();
+            runQuery(1);
         }));
 
         container.appendChild(createCategoryNode('Triggers', triggers, (trig) => {
             setActiveDatabase(dbName);
             sqlInput.value = `SHOW CREATE TRIGGER \`${dbName}\`.\`${trig.name}\`;`;
             updateLineNumbers();
-            runQuery();
+            runQuery(1);
         }));
     } catch (err) {
         container.innerHTML = `<p class="text-xs text-rose-300 px-2">${escapeHtml(err.message)}</p>`;
     }
 }
 
-// Execute SQL query (uses selected text if any, otherwise full editor)
-async function runQuery() {
-    const selected = sqlInput.value.substring(sqlInput.selectionStart, sqlInput.selectionEnd).trim();
-    const sql = selected || sqlInput.value.trim();
+function hidePagination() {
+    paginationState = null;
+    paginationBar.classList.add('hidden');
+}
+
+function updatePaginationUI(result) {
+    if (!paginationState || !result.paginated) {
+        paginationBar.classList.add('hidden');
+        return;
+    }
+
+    const fromRow = result.rowCount > 0 ? result.offset + 1 : 0;
+    const toRow = result.offset + result.rowCount;
+    const label = paginationState.mode === 'table'
+        ? `${paginationState.dbName}.${paginationState.objectName}`
+        : 'SQL Query';
+
+    paginationInfo.textContent = `${label} | Rows ${fromRow} - ${toRow}`;
+    paginationPageBadge.textContent = `Page ${result.page}`;
+    btnPrevPage.disabled = result.page <= 1;
+    btnNextPage.disabled = !result.hasMore;
+    paginationBar.classList.remove('hidden');
+}
+
+// Load a specific page of a table or view from Explorer
+async function loadTablePage(dbName, objectName, page = 1) {
+    setActiveDatabase(dbName);
+    resultsMeta.textContent = 'Loading page...';
+
+    try {
+        const url = `/api/connections/${connId}/databases/${encodeURIComponent(dbName)}/objects/${encodeURIComponent(objectName)}/data?page=${page}&pageSize=${PAGE_SIZE}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.ok) {
+            hidePagination();
+            resultsMeta.textContent = 'Error';
+            resultsContainer.innerHTML = `
+                <div class="p-4">
+                    <div class="bg-[#240b14]/90 border border-rose-400/40 text-rose-200 rounded-lg p-4 text-xs sql-font whitespace-pre-wrap">${escapeHtml(data.error)}</div>
+                </div>
+            `;
+            showToast('Failed to load table data.', 'error');
+            return;
+        }
+
+        paginationState = {
+            mode: 'table',
+            dbName,
+            objectName,
+            page: data.result.page,
+            hasMore: data.result.hasMore
+        };
+
+        sqlInput.value = data.result.displaySql;
+        updateLineNumbers();
+        renderQueryResult(data.result);
+        updatePaginationUI(data.result);
+        resultsContainer.scrollTop = 0;
+    } catch (err) {
+        resultsMeta.textContent = 'Network error';
+        showToast(`Network error: ${err.message}`, 'error');
+    }
+}
+
+// Execute SQL query from editor (500 rows per page by default)
+async function runQuery(page = 1, overrideSql = null, overrideDb = null) {
+    let sql = overrideSql;
+    if (sql === null) {
+        const selected = sqlInput.value.substring(sqlInput.selectionStart, sqlInput.selectionEnd).trim();
+        sql = selected || sqlInput.value.trim();
+    }
 
     if (!sql) {
         showToast('Write a SQL query before executing.', 'error');
         return;
     }
 
-    resultsMeta.textContent = 'Executing...';
+    const database = overrideDb !== null ? overrideDb : activeDatabase;
+    resultsMeta.textContent = page > 1 ? `Loading page ${page}...` : 'Executing...';
+
     try {
         const res = await fetch(`/api/connections/${connId}/query`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sql, database: activeDatabase })
+            body: JSON.stringify({ sql, database, page, pageSize: PAGE_SIZE })
         });
         const data = await res.json();
 
         if (!data.ok) {
+            hidePagination();
             resultsMeta.textContent = 'Error';
             resultsContainer.innerHTML = `
                 <div class="p-4">
@@ -350,7 +425,21 @@ async function runQuery() {
             return;
         }
 
+        if (data.result.paginated) {
+            paginationState = {
+                mode: 'query',
+                sql,
+                database,
+                page: data.result.page,
+                hasMore: data.result.hasMore
+            };
+        } else {
+            paginationState = null;
+        }
+
         renderQueryResult(data.result);
+        updatePaginationUI(data.result);
+        resultsContainer.scrollTop = 0;
     } catch (err) {
         resultsMeta.textContent = 'Network error';
         showToast(`Network error: ${err.message}`, 'error');
@@ -359,7 +448,13 @@ async function runQuery() {
 
 function renderQueryResult(result) {
     if (result.type === 'resultset') {
-        resultsMeta.textContent = `${result.rowCount} rows | ${result.durationMs} ms`;
+        let extra = '';
+        if (result.paginated) {
+            extra = ` (page ${result.page}${result.hasMore ? '+' : ''})`;
+        } else if (result.truncated) {
+            extra = ` (limited to ${result.limit})`;
+        }
+        resultsMeta.textContent = `${result.rowCount} rows${extra} | ${result.durationMs} ms`;
 
         if (result.rows.length === 0) {
             resultsContainer.innerHTML = `
@@ -458,7 +553,6 @@ sqlFileInput.addEventListener('change', (e) => {
     };
     reader.readAsText(file);
 
-    // Reset input so selecting the same file again still triggers change
     sqlFileInput.value = '';
 });
 
@@ -487,8 +581,18 @@ document.addEventListener('mouseup', () => {
     document.body.classList.remove('select-none', 'cursor-row-resize');
 });
 
+// Navigate to a specific page in current mode (SQL query or Explorer table)
+function goToPage(targetPage) {
+    if (!paginationState || targetPage < 1) return;
+    if (paginationState.mode === 'table') {
+        loadTablePage(paginationState.dbName, paginationState.objectName, targetPage);
+    } else if (paginationState.mode === 'query') {
+        runQuery(targetPage, paginationState.sql, paginationState.database);
+    }
+}
+
 // Buttons
-document.getElementById('btn-run').addEventListener('click', runQuery);
+document.getElementById('btn-run').addEventListener('click', () => runQuery(1));
 document.getElementById('btn-refresh-tree').addEventListener('click', loadTree);
 document.getElementById('btn-clear-sql').addEventListener('click', () => {
     sqlInput.value = '';
@@ -497,6 +601,19 @@ document.getElementById('btn-clear-sql').addEventListener('click', () => {
 });
 document.getElementById('btn-exit').addEventListener('click', () => {
     window.location.href = '/';
+});
+
+// Pagination controls
+btnPrevPage.addEventListener('click', () => {
+    if (paginationState && paginationState.page > 1) {
+        goToPage(paginationState.page - 1);
+    }
+});
+
+btnNextPage.addEventListener('click', () => {
+    if (paginationState && paginationState.hasMore) {
+        goToPage(paginationState.page + 1);
+    }
 });
 
 // Init
