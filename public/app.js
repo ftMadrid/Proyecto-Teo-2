@@ -49,7 +49,6 @@ function showToast(text, type = 'success') {
     toast.classList.remove('opacity-0', 'translate-y-2', 'pointer-events-none');
     toast.classList.add('opacity-100', 'translate-y-0', 'pointer-events-auto');
 
-    // Auto-close after 4 seconds for final results
     if (type !== 'info') {
         toastTimer = setTimeout(hideToast, 4000);
     }
@@ -128,17 +127,27 @@ async function refreshActiveConnections() {
     activeList.innerHTML = '';
     list.forEach(conn => {
         const div = document.createElement('div');
-        div.className = 'flex items-center justify-between bg-[#05060c] border border-violet-500/40 p-3 rounded-lg hover:border-violet-400 transition';
+        div.className = 'flex items-center justify-between gap-2 bg-[#05060c] border border-violet-500/40 p-3 rounded-lg hover:border-violet-400 transition';
         div.innerHTML = `
-            <div>
-                <p class="font-medium text-violet-300">${conn.name}</p>
-                <p class="text-xs text-slate-400">${conn.user}@${conn.host}:${conn.port}</p>
+            <div class="cursor-pointer flex-1 min-w-0" data-open>
+                <p class="font-medium text-violet-300 truncate">${conn.name}</p>
+                <p class="text-xs text-slate-400 truncate">${conn.user}@${conn.host}:${conn.port}</p>
             </div>
-            <button class="text-xs bg-rose-950/80 hover:bg-rose-900 border border-rose-500/30 text-rose-200 px-2.5 py-1 rounded transition">
-                Disconnect
-            </button>
+            <div class="flex items-center gap-1.5 shrink-0">
+                <button data-open class="text-xs bg-violet-600/80 hover:bg-violet-500 text-white px-2.5 py-1 rounded transition">
+                    Open
+                </button>
+                <button data-disconnect class="text-xs bg-rose-950/80 hover:bg-rose-900 border border-rose-500/30 text-rose-200 px-2.5 py-1 rounded transition">
+                    Disconnect
+                </button>
+            </div>
         `;
-        div.querySelector('button').addEventListener('click', async () => {
+        div.querySelectorAll('[data-open]').forEach(el => {
+            el.addEventListener('click', () => {
+                window.location.href = `/workspace.html?id=${conn.id}`;
+            });
+        });
+        div.querySelector('[data-disconnect]').addEventListener('click', async () => {
             await fetch(`/api/connections/${conn.id}`, { method: 'DELETE' });
             refreshActiveConnections();
             showToast(`Disconnected from ${conn.name}`, 'info');
@@ -183,9 +192,8 @@ form.addEventListener('submit', async (e) => {
         const data = await res.json();
 
         if (data.ok) {
-            showToast(`Connected to ${data.info.name}`, 'success');
             saveConnectionProfile(payload);
-            refreshActiveConnections();
+            window.location.href = `/workspace.html?id=${data.info.id}`;
         } else {
             showToast(`Error connecting: ${data.error}`, 'error');
         }

@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const connManager = require('./src/connectionManager');
+const dbExplorer = require('./src/dbExplorer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -8,12 +9,10 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Estado del servidor
 app.get('/api/status', (req, res) => {
-    res.json({ ok: true, message: 'Server Node.js + Express active in Docker' });
+    res.json({ ok: true, message: 'Node.js + Express server active' });
 });
 
-// Probar credenciales sin abrir sesion
 app.post('/api/connections/test', async (req, res) => {
     try {
         const result = await connManager.testConnection(req.body);
@@ -23,7 +22,6 @@ app.post('/api/connections/test', async (req, res) => {
     }
 });
 
-// Abrir una nueva conexion (soporta multiples simultaneas)
 app.post('/api/connections/connect', async (req, res) => {
     try {
         const data = await connManager.openConnection(req.body);
@@ -33,12 +31,19 @@ app.post('/api/connections/connect', async (req, res) => {
     }
 });
 
-// Listar conexiones activas en el servidor
 app.get('/api/connections', (req, res) => {
     res.json({ ok: true, connections: connManager.listActiveConnections() });
 });
 
-// Cerrar una conexion especifica
+app.get('/api/connections/:id', (req, res) => {
+    try {
+        const info = connManager.getConnectionInfo(req.params.id);
+        res.json({ ok: true, info });
+    } catch (err) {
+        res.status(404).json({ ok: false, error: err.message });
+    }
+});
+
 app.delete('/api/connections/:id', async (req, res) => {
     try {
         const closed = await connManager.closeConnection(req.params.id);
@@ -48,6 +53,50 @@ app.delete('/api/connections/:id', async (req, res) => {
     }
 });
 
+// Workspace: list databases
+app.get('/api/connections/:id/databases', async (req, res) => {
+    try {
+        const databases = await dbExplorer.listDatabases(req.params.id);
+        res.json({ ok: true, databases });
+    } catch (err) {
+        res.status(400).json({ ok: false, error: err.message });
+    }
+});
+
+// Workspace: list objects inside a database
+app.get('/api/connections/:id/databases/:db/objects', async (req, res) => {
+    try {
+        const objects = await dbExplorer.listDatabaseObjects(req.params.id, req.params.db);
+        res.json({ ok: true, objects });
+    } catch (err) {
+        res.status(400).json({ ok: false, error: err.message });
+    }
+});
+
+// Workspace: list server users
+app.get('/api/connections/:id/users', async (req, res) => {
+    try {
+        const users = await dbExplorer.listUsers(req.params.id);
+        res.json({ ok: true, users });
+    } catch (err) {
+        res.status(400).json({ ok: false, error: err.message });
+    }
+});
+
+// Workspace: execute SQL query
+app.post('/api/connections/:id/query', async (req, res) => {
+    try {
+        const { sql, database } = req.body;
+        if (!sql || !sql.trim()) {
+            return res.status(400).json({ ok: false, error: 'SQL query cannot be empty.' });
+        }
+        const result = await dbExplorer.executeQuery(req.params.id, sql, database);
+        res.json({ ok: true, result });
+    } catch (err) {
+        res.status(400).json({ ok: false, error: err.message });
+    }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Database Manager running in http://0.0.0.0:${PORT}`);
+    console.log(`Database Manager running on http://0.0.0.0:${PORT}`);
 });

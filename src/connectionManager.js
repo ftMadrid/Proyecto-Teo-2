@@ -1,7 +1,7 @@
 const mariadb = require('mariadb');
 const crypto = require('crypto');
 
-// Almacena en memoria los pools de conexiones activas: Map<id, { pool, info }>
+// Stores active connection pools in memory: Map<id, { pool, info }>
 const activeConnections = new Map();
 
 function buildConfig({ host, port, user, password, database }) {
@@ -19,7 +19,7 @@ function buildConfig({ host, port, user, password, database }) {
     return config;
 }
 
-// Prueba sin dejar la conexion abierta
+// Quick test without keeping the connection open
 async function testConnection(params) {
     let conn;
     try {
@@ -31,7 +31,7 @@ async function testConnection(params) {
     }
 }
 
-// Abre una conexión persistente (pool) y la registra con un ID único
+// Open a persistent pool and register it with a unique ID
 async function openConnection(params) {
     const config = buildConfig(params);
     const pool = mariadb.createPool(config);
@@ -65,14 +65,18 @@ async function openConnection(params) {
     }
 }
 
-// Obtiene el pool activo para ejecutar consultas en los siguientes módulos
 function getPool(id) {
     const entry = activeConnections.get(id);
-    if (!entry) throw new Error('| Conexion no encontrada o cerrada.');
+    if (!entry) throw new Error('Connection not found or closed.');
     return entry.pool;
 }
 
-// Cierra una conexión específica
+function getConnectionInfo(id) {
+    const entry = activeConnections.get(id);
+    if (!entry) throw new Error('Connection not found or closed.');
+    return entry.info;
+}
+
 async function closeConnection(id) {
     const entry = activeConnections.get(id);
     if (!entry) return false;
@@ -81,7 +85,6 @@ async function closeConnection(id) {
     return true;
 }
 
-// Lista las conexiones activas (sin exponer passwords)
 function listActiveConnections() {
     return Array.from(activeConnections.values()).map(entry => entry.info);
 }
@@ -90,6 +93,7 @@ module.exports = {
     testConnection,
     openConnection,
     getPool,
+    getConnectionInfo,
     closeConnection,
     listActiveConnections
 };
