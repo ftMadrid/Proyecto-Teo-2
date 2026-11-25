@@ -1,117 +1,136 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MariaDB Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom dark purple scrollbar */
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #070812;
+            border-radius: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #4c3575;
+            border-radius: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #7c5cbf;
+        }
+    </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+<body class="bg-gradient-to-br from-[#1b2868] via-[#2f1e5e] to-[#120b24] bg-fixed text-slate-100 min-h-screen flex flex-col">
 
-    <!-- Barra superior -->
-    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+    <!-- Top bar -->
+    <header class="bg-[#080912]/90 backdrop-blur-md border-b border-violet-500/20 px-6 py-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
-            <div class="w-3 h-3 rounded-full bg-emerald-400"></div>
-            <h1 class="text-lg font-bold tracking-tight">Database Manager</h1>
+            <div class="w-3 h-3 rounded-full bg-violet-400 shadow-[0_0_10px_rgba(167,139,250,0.8)]"></div>
+            <h1 class="text-lg font-bold tracking-tight text-white">MariaDB Manager</h1>
         </div>
-        <span id="active-badge" class="text-xs px-3 py-1 rounded-full bg-slate-800 text-slate-400">
-            0 conexiones activas
+        <span id="active-badge" class="text-xs px-3 py-1 rounded-full bg-[#131733] border border-violet-500/30 text-violet-200">
+            0 active sessions
         </span>
     </header>
 
-    <!-- Contenido principal -->
-    <main class="flex-1 max-w-6xl w-full mx-auto p-6 grid grid-cols-1 md:grid-cols-12 gap-6">
+    <!-- Main content -->
+    <main class="max-w-6xl w-full mx-auto p-6 grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
 
-        <!-- Panel izquierdo: Conexiones guardadas y activas -->
-        <aside class="md:col-span-5 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col gap-4">
-            <div class="flex items-center justify-between">
-                <h2 class="font-semibold text-slate-200">Conexiones Guardadas</h2>
-                <button id="btn-new" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg text-emerald-400 font-medium">
-                    + Nueva
-                </button>
+        <!-- Left panel: locked to right panel height with internal scroll -->
+        <aside class="md:col-span-5 md:h-0 md:min-h-full bg-[#0a0b14]/90 backdrop-blur-md border border-violet-500/25 shadow-2xl shadow-black/60 rounded-xl p-5 flex flex-col gap-4 overflow-hidden">
+            <div class="flex-1 min-h-0 flex flex-col gap-3">
+                <div class="flex items-center justify-between shrink-0">
+                    <h2 class="font-semibold text-violet-100">Saved Connections</h2>
+                    <button id="btn-new" class="text-xs bg-[#161b3a] hover:bg-[#222957] border border-violet-400/30 px-3 py-1.5 rounded-lg text-violet-300 font-medium transition">
+                        + New
+                    </button>
+                </div>
+                <div id="saved-list" class="space-y-2 text-sm text-slate-400 flex-1 min-h-0 overflow-y-auto pr-1 custom-scroll">
+                    No saved connections yet.
+                </div>
             </div>
-            <div id="saved-list" class="space-y-2 text-sm text-slate-400">
-                No hay conexiones guardadas aún.
-            </div>
 
-            <hr class="border-slate-800 my-2">
+            <hr class="border-violet-500/20 shrink-0">
 
-            <h2 class="font-semibold text-slate-200">Sesiones Activas</h2>
-            <div id="active-list" class="space-y-2 text-sm text-slate-400">
-                Ninguna sesión abierta.
+            <div class="flex-1 min-h-0 flex flex-col gap-3">
+                <h2 class="font-semibold text-violet-100 shrink-0">Active Sessions</h2>
+                <div id="active-list" class="space-y-2 text-sm text-slate-400 flex-1 min-h-0 overflow-y-auto pr-1 custom-scroll">
+                    No active sessions.
+                </div>
             </div>
         </aside>
 
-        <!-- Panel derecho: Formulario + Vista previa de BD -->
-        <section class="md:col-span-7 space-y-6">
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                <h2 class="font-semibold text-lg mb-4 text-slate-100">Configurar Conexión</h2>
+        <!-- Right panel: Set Connection form -->
+        <section class="md:col-span-7 bg-[#0a0b14]/90 backdrop-blur-md border border-violet-500/25 shadow-2xl shadow-black/60 rounded-xl p-6 flex flex-col justify-between">
+            <div>
+                <h2 class="font-semibold text-lg mb-4 text-violet-100">Set Connection</h2>
 
                 <form id="conn-form" class="space-y-4">
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1">Nombre de la conexión</label>
-                        <input id="name" type="text" placeholder="Ej. VPS Local - Root" required
-                            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
+                        <label class="block text-xs text-violet-200/70 mb-1">Connection's Name</label>
+                        <input id="name" type="text" required
+                            class="w-full bg-[#05060c] border border-indigo-900/80 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-400/40 transition">
                     </div>
 
                     <div class="grid grid-cols-3 gap-3">
                         <div class="col-span-2">
-                            <label class="block text-xs text-slate-400 mb-1">Host</label>
-                            <input id="host" type="text" value="127.0.0.1" required
-                                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
+                            <label class="block text-xs text-violet-200/70 mb-1">Host</label>
+                            <input id="host" type="text" required
+                                class="w-full bg-[#05060c] border border-indigo-900/80 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-400/40 transition">
                         </div>
                         <div>
-                            <label class="block text-xs text-slate-400 mb-1">Puerto</label>
+                            <label class="block text-xs text-violet-200/70 mb-1">Port</label>
                             <input id="port" type="number" value="6333" required
-                                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
+                                class="w-full bg-[#05060c] border border-indigo-900/80 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-400/40 transition">
                         </div>
                     </div>
 
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs text-slate-400 mb-1">Usuario</label>
-                            <input id="user" type="text" placeholder="root o mariadb" required
-                                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
+                            <label class="block text-xs text-violet-200/70 mb-1">User</label>
+                            <input id="user" type="text" required
+                                class="w-full bg-[#05060c] border border-indigo-900/80 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-400/40 transition">
                         </div>
                         <div>
-                            <label class="block text-xs text-slate-400 mb-1">Contraseña</label>
-                            <input id="password" type="password" placeholder="••••••••"
-                                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
+                            <label class="block text-xs text-violet-200/70 mb-1">Password</label>
+                            <input id="password" type="password"
+                                class="w-full bg-[#05060c] border border-indigo-900/80 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-400/40 transition">
                         </div>
                     </div>
 
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1">Base de datos inicial (opcional)</label>
-                        <input id="database" type="text" placeholder="Dejar vacío para ver todas"
-                            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
+                        <label class="block text-xs text-violet-200/70 mb-1">Database Name (optional)</label>
+                        <input id="database" type="text" placeholder="Leave empty to see all"
+                            class="w-full bg-[#05060c] border border-indigo-900/80 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-400/40 transition">
                     </div>
-
-                    <div id="status-msg" class="hidden text-sm px-4 py-2.5 rounded-lg"></div>
 
                     <div class="flex gap-3 pt-2">
                         <button type="button" id="btn-test"
-                            class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-medium transition">
-                            Probar Conexión
+                            class="px-4 py-2 rounded-lg bg-[#161b3a] hover:bg-[#222957] border border-violet-400/30 text-violet-100 text-sm font-medium transition">
+                            Test Connection
                         </button>
                         <button type="submit"
-                            class="flex-1 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold transition">
-                            Guardar y Conectar
+                            class="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-500 hover:from-indigo-500 hover:to-violet-400 text-white text-sm font-semibold shadow-lg shadow-violet-950/60 transition">
+                            Save and Connect
                         </button>
                     </div>
                 </form>
             </div>
-
-            <!-- Resultado al conectar -->
-            <div id="db-preview" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-6">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 id="preview-title" class="font-semibold text-emerald-400"></h3>
-                    <span id="preview-version" class="text-xs text-slate-400"></span>
-                </div>
-                <p class="text-xs text-slate-400 mb-3">Bases de datos detectadas en esta conexión:</p>
-                <div id="db-tags" class="flex flex-wrap gap-2"></div>
-            </div>
         </section>
     </main>
+
+    <!-- Floating toast popup -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 max-w-sm w-full opacity-0 translate-y-2 pointer-events-none transition-all duration-300">
+        <div id="toast-box" class="flex items-start justify-between gap-3 px-4 py-3 rounded-xl shadow-2xl border text-sm">
+            <span id="toast-text" class="leading-snug"></span>
+            <button id="toast-close" type="button" class="text-xs opacity-70 hover:opacity-100 font-bold px-1">
+                X
+            </button>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>

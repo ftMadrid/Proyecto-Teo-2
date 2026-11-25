@@ -1,10 +1,14 @@
 const STORAGE_KEY = 'db_manager_saved_connections';
 const form = document.getElementById('conn-form');
-const statusMsg = document.getElementById('status-msg');
 const savedList = document.getElementById('saved-list');
 const activeList = document.getElementById('active-list');
 const activeBadge = document.getElementById('active-badge');
-const dbPreview = document.getElementById('db-preview');
+
+const toast = document.getElementById('toast');
+const toastBox = document.getElementById('toast-box');
+const toastText = document.getElementById('toast-text');
+const toastClose = document.getElementById('toast-close');
+let toastTimer = null;
 
 function getFormData() {
     return {
@@ -17,14 +21,41 @@ function getFormData() {
     };
 }
 
-function showStatus(text, isError = false) {
-    statusMsg.textContent = text;
-    statusMsg.className = `text-sm px-4 py-2.5 rounded-lg ${
-        isError
-            ? 'bg-rose-950 text-rose-300 border border-rose-800'
-            : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-    }`;
+function hideToast() {
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+        toastTimer = null;
+    }
+    toast.classList.add('opacity-0', 'translate-y-2', 'pointer-events-none');
+    toast.classList.remove('opacity-100', 'translate-y-0', 'pointer-events-auto');
 }
+
+// type: 'info' | 'success' | 'error'
+function showToast(text, type = 'success') {
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+        toastTimer = null;
+    }
+
+    const styles = {
+        info: 'bg-[#0d1024]/95 text-violet-100 border-indigo-400/40 shadow-indigo-950/60',
+        success: 'bg-[#071f1a]/95 text-emerald-200 border-emerald-400/50 shadow-emerald-950/60',
+        error: 'bg-[#240b14]/95 text-rose-200 border-rose-400/50 shadow-rose-950/60'
+    };
+
+    toastText.textContent = text;
+    toastBox.className = `flex items-start justify-between gap-3 px-4 py-3 rounded-xl shadow-2xl border text-sm backdrop-blur-md ${styles[type] || styles.info}`;
+
+    toast.classList.remove('opacity-0', 'translate-y-2', 'pointer-events-none');
+    toast.classList.add('opacity-100', 'translate-y-0', 'pointer-events-auto');
+
+    // Auto-close after 4 seconds for final results
+    if (type !== 'info') {
+        toastTimer = setTimeout(hideToast, 4000);
+    }
+}
+
+toastClose.addEventListener('click', hideToast);
 
 function loadSavedConnections() {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
@@ -33,7 +64,7 @@ function loadSavedConnections() {
 function saveConnectionProfile(profile) {
     const list = loadSavedConnections();
     const index = list.findIndex(c => c.name === profile.name);
-    // Guardamos el perfil sin la contraseña por seguridad, o reemplaza si ya existe el nombre
+    // Save profile without password for security
     const toStore = { ...profile, password: '' };
     if (index >= 0) list[index] = toStore;
     else list.push(toStore);
@@ -60,21 +91,21 @@ function fillForm(profile) {
 function renderSavedConnections() {
     const list = loadSavedConnections();
     if (list.length === 0) {
-        savedList.innerHTML = '<p class="text-slate-500">No hay conexiones guardadas aún.</p>';
+        savedList.innerHTML = '<p class="text-slate-500">No saved connections yet.</p>';
         return;
     }
 
     savedList.innerHTML = '';
     list.forEach(conn => {
         const div = document.createElement('div');
-        div.className = 'flex items-center justify-between bg-slate-950 border border-slate-800 p-3 rounded-lg hover:border-slate-700';
+        div.className = 'flex items-center justify-between bg-[#05060c] border border-indigo-900/60 p-3 rounded-lg hover:border-violet-400/50 transition';
         div.innerHTML = `
             <div class="cursor-pointer flex-1" data-action="load">
-                <p class="font-medium text-slate-200">${conn.name}</p>
-                <p class="text-xs text-slate-500">${conn.user}@${conn.host}:${conn.port}</p>
+                <p class="font-medium text-violet-100">${conn.name}</p>
+                <p class="text-xs text-slate-400">${conn.user}@${conn.host}:${conn.port}</p>
             </div>
             <button data-action="delete" class="text-xs text-rose-400 hover:text-rose-300 px-2 py-1">
-                Eliminar
+                Delete
             </button>
         `;
         div.querySelector('[data-action="load"]').addEventListener('click', () => fillForm(conn));
@@ -88,76 +119,78 @@ async function refreshActiveConnections() {
     const data = await res.json();
     const list = data.connections || [];
 
-    activeBadge.textContent = `${list.length} ${list.length === 1 ? 'conexión activa' : 'conexiones activas'}`;
+    activeBadge.textContent = `${list.length} ${list.length === 1 ? 'active session' : 'active sessions'}`;
     if (list.length === 0) {
-        activeList.innerHTML = '<p class="text-slate-500">Ninguna sesión abierta.</p>';
+        activeList.innerHTML = '<p class="text-slate-500">No active sessions.</p>';
         return;
     }
 
     activeList.innerHTML = '';
     list.forEach(conn => {
         const div = document.createElement('div');
-        div.className = 'flex items-center justify-between bg-slate-950 border border-emerald-900/50 p-3 rounded-lg';
+        div.className = 'flex items-center justify-between bg-[#05060c] border border-violet-500/40 p-3 rounded-lg hover:border-violet-400 transition';
         div.innerHTML = `
             <div>
-                <p class="font-medium text-emerald-400">${conn.name}</p>
-                <p class="text-xs text-slate-500">${conn.user}@${conn.host}:${conn.port}</p>
+                <p class="font-medium text-violet-300">${conn.name}</p>
+                <p class="text-xs text-slate-400">${conn.user}@${conn.host}:${conn.port}</p>
             </div>
-            <button class="text-xs bg-rose-950 hover:bg-rose-900 text-rose-300 px-2.5 py-1 rounded">
-                Desconectar
+            <button class="text-xs bg-rose-950/80 hover:bg-rose-900 border border-rose-500/30 text-rose-200 px-2.5 py-1 rounded transition">
+                Disconnect
             </button>
         `;
         div.querySelector('button').addEventListener('click', async () => {
             await fetch(`/api/connections/${conn.id}`, { method: 'DELETE' });
             refreshActiveConnections();
+            showToast(`Disconnected from ${conn.name}`, 'info');
+            toastTimer = setTimeout(hideToast, 2500);
         });
         activeList.appendChild(div);
     });
 }
 
-// Botón Probar Conexión
+// Test Connection button
 document.getElementById('btn-test').addEventListener('click', async () => {
-    showStatus('Probando conexión...');
-    const res = await fetch('/api/connections/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(getFormData())
-    });
-    const data = await res.json();
-    if (data.ok) {
-        showStatus(`Conexión exitosa. MariaDB ${data.version} (${data.currentUser})`);
-    } else {
-        showStatus(`Error: ${data.error}`, true);
+    showToast('Testing connection...', 'info');
+    try {
+        const res = await fetch('/api/connections/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(getFormData())
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast(`Connection successful. MariaDB ${data.version} (${data.currentUser})`, 'success');
+        } else {
+            showToast(`Error: ${data.error}`, 'error');
+        }
+    } catch (err) {
+        showToast(`Network error: ${err.message}`, 'error');
     }
 });
 
-// Botón Guardar y Conectar
+// Save and Connect button
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = getFormData();
-    showStatus('Conectando...');
+    showToast('Connecting...', 'info');
 
-    const res = await fetch('/api/connections/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
-    const data = await res.json();
+    try {
+        const res = await fetch('/api/connections/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
 
-    if (data.ok) {
-        showStatus(`Conectado a ${data.info.name}`);
-        saveConnectionProfile(payload);
-        refreshActiveConnections();
-
-        // Mostrar bases de datos obtenidas
-        dbPreview.classList.remove('hidden');
-        document.getElementById('preview-title').textContent = data.info.name;
-        document.getElementById('preview-version').textContent = `MariaDB ${data.info.version}`;
-        document.getElementById('db-tags').innerHTML = data.databases
-            .map(db => `<span class="px-3 py-1 bg-slate-800 border border-slate-700 rounded-md text-xs text-slate-200">${db}</span>`)
-            .join('');
-    } else {
-        showStatus(`Error al conectar: ${data.error}`, true);
+        if (data.ok) {
+            showToast(`Connected to ${data.info.name}`, 'success');
+            saveConnectionProfile(payload);
+            refreshActiveConnections();
+        } else {
+            showToast(`Error connecting: ${data.error}`, 'error');
+        }
+    } catch (err) {
+        showToast(`Network error: ${err.message}`, 'error');
     }
 });
 
@@ -165,9 +198,9 @@ document.getElementById('btn-new').addEventListener('click', () => {
     form.reset();
     document.getElementById('host').value = '127.0.0.1';
     document.getElementById('port').value = 6333;
-    statusMsg.className = 'hidden';
+    hideToast();
 });
 
-// Inicializar
+// Initialize
 renderSavedConnections();
 refreshActiveConnections();

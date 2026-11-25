@@ -10,7 +10,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Estado del servidor
 app.get('/api/status', (req, res) => {
-    res.json({ ok: true, message: 'Servidor Node.js + Express activo en Docker' });
+    res.json({ ok: true, message: 'Server Node.js + Express active in Docker' });
 });
 
 // Probar credenciales sin abrir sesion
@@ -49,5 +49,5 @@ app.delete('/api/connections/:id', async (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Database Manager corriendo en http://0.0.0.0:${PORT}`);
+    console.log(`Database Manager running in http://0.0.0.0:${PORT}`);
 });
